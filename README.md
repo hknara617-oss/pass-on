@@ -35,7 +35,7 @@ Do not put a Supabase service-role or secret key in any `NEXT_PUBLIC_*` variable
 ## Authentication and recovery
 
 - `/login` supports password sign-in and links to **비밀번호를 잊으셨나요?**.
-- `/forgot-password` calls `resetPasswordForEmail` using PKCE. It never creates an account or signs out an existing session. It returns the same confirmation text for registered and unregistered addresses.
+- `/forgot-password` calls `resetPasswordForEmail` and directs the default Supabase recovery link to `/auth/recovery`. It never creates an account or signs out an existing session. It returns the same confirmation text for registered and unregistered addresses.
 - `/auth/callback` exchanges recovery codes and opens `/auth/update-password`.
 - `supabase/templates/recovery.html` provides the cross-browser recovery option. It forwards a recovery `token_hash` to `/auth/confirm`, which requires an explicit button press before `verifyOtp({ type: 'recovery' })` and opens the password form.
 - The password form confirms the authenticated user and calls `updateUser({ password })`. The existing Supabase identity and every database foreign key remain unchanged.
@@ -48,6 +48,7 @@ Before release, preserve existing Auth configuration and add the production call
 
 - `https://pass-on-jet.vercel.app/auth/callback`
 - `https://pass-on-jet.vercel.app/auth/callback?next=/capture`
+- `https://pass-on-jet.vercel.app/auth/recovery`
 
 Configure a working SMTP sender. To support cross-browser recovery, install `supabase/templates/recovery.html` as the Supabase Reset Password email template. Validate email delivery and recovery against the existing account before release. Do not reset the database, replace users, change ownership, rotate signing keys or clear sessions.
 

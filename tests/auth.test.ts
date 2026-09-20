@@ -70,7 +70,7 @@ test("real SDK recovery request calls recover only, carries PKCE, never calls si
   assert.ok(requests[0].body.code_challenge);
   assert.equal(
     new URL(requests[0].url).searchParams.get("redirect_to"),
-    "https://pass-on-jet.vercel.app/auth/callback",
+    "https://pass-on-jet.vercel.app/auth/recovery",
   );
 });
 test("email recovery refuses an insecure remote origin", async () => {

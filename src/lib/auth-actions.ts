@@ -13,7 +13,7 @@ export async function requestRecovery(
   )
     throw new Error("Insecure recovery origin");
   return client.auth.resetPasswordForEmail(email.trim(), {
-    redirectTo: `${target.origin}/auth/callback`,
+    redirectTo: `${target.origin}/auth/recovery`,
   });
 }
 export async function changePassword(
