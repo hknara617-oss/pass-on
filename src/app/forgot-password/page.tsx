@@ -1,4 +1,2 @@
-import { RecoveryForm } from "@/components/recovery-form";
-export default function Page() {
-  return <RecoveryForm />;
-}
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/device"); }

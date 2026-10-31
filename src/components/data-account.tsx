@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { readEntries, readChildren, MEDIA_BUCKET } from "@/lib/records";
 import { Status } from "./auth-ui";
@@ -100,15 +99,15 @@ export function DataAccount({
     }
   }
   async function logout() {
-    if (busy) return;
+    if (busy || !confirm("이 기기 연결만 해제합니다. 기록은 삭제되지 않습니다. 다시 연결하려면 개인 연결 링크가 필요합니다. 계속할까요?")) return;
     setBusy(true);
     setError("");
     try {
-      const { error } = await createClient().auth.signOut({ scope: "local" });
-      if (error) throw error;
-      location.assign("/login");
+      const response = await fetch("/api/device", { method: "DELETE", credentials: "same-origin" });
+      if (!response.ok) throw new Error("disconnect");
+      location.assign("/device?disconnected=1");
     } catch {
-      setError("로그아웃을 확인하지 못했습니다.");
+      setError("기기 연결 해제를 확인하지 못했습니다.");
       setBusy(false);
     }
   }
@@ -124,13 +123,9 @@ export function DataAccount({
         <p className="hint">{childNames.join(", ")}에게 남기고 있습니다.</p>
       </div>
       <div className="card">
-        <h2>보안</h2>
-        <Link className="data-button" href="/data/security">
-          비밀번호 변경 <span aria-hidden="true">→</span>
-        </Link>
-        <Link className="text-link" href="/forgot-password">
-          이메일로 계정 복구
-        </Link>
+        <h2>나만의 기기</h2>
+        <p className="hint">개인 연결을 마친 기기에서만 열립니다. 기기 잠금과 Face ID를 사용해 주세요. 웹사이트 데이터를 지우면 다시 연결해야 합니다.</p>
+        <p className="hint">계정과 클라우드 기록은 그대로 유지합니다. 이 기기의 연결을 해제해도 기록은 삭제되지 않습니다.</p>
       </div>
       <div className="card">
         <h2>기록 가져가기</h2>
@@ -144,7 +139,7 @@ export function DataAccount({
       </div>
       <Status error={error} message={message} />
       <button className="text-link logout" disabled={busy} onClick={logout}>
-        이 브라우저에서 로그아웃
+        이 기기 연결 해제
       </button>
     </section>
   );

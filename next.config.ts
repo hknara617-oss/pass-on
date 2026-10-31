@@ -15,6 +15,7 @@ const config: NextConfig = {
           },
         ],
       },
+      { source: "/device", headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }] },
       {
         source: "/auth/:path*",
         headers: [
