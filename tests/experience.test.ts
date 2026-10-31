@@ -1,0 +1,30 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { clock, entryKind, matchesEntry, monthGroups, recipientLabel, recordExcerpt } from "../src/lib/experience";
+import { persistCapture, assignRecipient } from "../src/lib/records";
+import type { Entry, Child } from "../src/lib/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+const children=[{id:"child",user_id:"owner",name:"하루"}] as Child[];
+const entry={id:"a",user_id:"owner",child_id:"child",text:"같이 걸었던 산책길",created_at:"2026-10-31T16:00:00Z",attachments:[],link_attachments:[{url:"https://example.com",quote_or_note:"Remember This",metadata_title:"A book"}],entry_notes:[{id:"n",text:"다시 보니 고마운 하루"}],entry_revisions:[],is_deleted:false} as Entry;
+test("search is Korean and ASCII case-insensitive",()=>{assert.ok(matchesEntry(entry,"산책길",children));assert.ok(matchesEntry(entry,"remember",children));});
+test("search includes notes and recipient names",()=>{assert.ok(matchesEntry(entry,"고마운",children));assert.ok(matchesEntry(entry,"하루",children));});
+test("all query words must match",()=>{assert.ok(matchesEntry(entry,"산책길 하루",children));assert.equal(matchesEntry(entry,"산책길 없는단어",children),false);});
+test("search treats regex syntax as ordinary text",()=>assert.equal(matchesEntry(entry,".*",children),false));
+test("empty search includes the record",()=>assert.ok(matchesEntry(entry,"   ",children)));
+test("search never rewrites originals",()=>{const before=JSON.stringify(entry);matchesEntry(entry,"산책",children);assert.equal(JSON.stringify(entry),before);});
+test("unassigned is not fabricated as a child",()=>assert.equal(recipientLabel(null,children),"아직 정하지 않음"));
+test("missing recipient is labelled honestly",()=>assert.equal(recipientLabel("other",children),"받는 사람 미확인"));
+test("month grouping uses Seoul dates",()=>assert.equal(monthGroups([entry])[0].label,"2026년 11월"));
+test("grouping orders a copy without mutating inputs",()=>{const older={...entry,id:"b",created_at:"2026-09-01T00:00:00Z"};const source=[older,entry];monthGroups(source);assert.equal(source[0].id,"b");});
+test("clock is stable for limits and invalid inputs",()=>{assert.equal(clock(65),"01:05");assert.equal(clock(300),"05:00");assert.equal(clock(-1),"00:00");assert.equal(clock(NaN),"00:00");});
+test("media type and excerpt do not invent text",()=>{assert.equal(entryKind(entry),"link");assert.equal(recordExcerpt(entry),entry.text);});
+function mock(){
+ const tables:Record<string,any[]>={children:[{id:"child",user_id:"owner"}],entries:[],attachments:[],link_attachments:[]};
+ const calls:{table:string;update?:object;insert?:object;filters:Record<string,unknown>}[]=[];
+ const client={from(table:string){let insert:any,update:any;const filters:Record<string,unknown>={};let one=false;const q:any={select:()=>q,eq:(k:string,v:unknown)=>{filters[k]=v;return q;},order:()=>q,insert:(v:any)=>{insert=v;return q;},update:(v:any)=>{update=v;return q;},single:()=>{one=true;return q;},maybeSingle:()=>{one=true;return q;},then(resolve:any){calls.push({table,insert,update,filters:{...filters}});if(insert)tables[table].push({...insert,attachments:[],link_attachments:[],entry_notes:[],entry_revisions:[]});let rows=tables[table].filter(r=>Object.entries(filters).every(([k,v])=>r[k]===v));if(update)rows.forEach(r=>Object.assign(r,update));return Promise.resolve({data:one?rows[0]||null:rows,error:null}).then(resolve);}};return q;}} as unknown as SupabaseClient;
+ return {client,tables,calls};
+}
+test("a new record can be saved before a recipient exists",async()=>{const m=mock();m.tables.children=[];const d={id:"entry",linkId:"link",childId:null,text:"한 문장",url:"",quote:"",createdAt:"2026-11-01T00:00:00Z"};await persistCapture(m.client,"owner",d,[]);assert.equal(m.tables.entries[0].child_id,null);assert.equal(m.tables.entries[0].text,"한 문장");});
+test("later recipient changes only the intention, not original text",async()=>{const m=mock();m.tables.entries=[{id:"entry",user_id:"owner",child_id:null,text:"원문",created_at:"then"}];await assignRecipient(m.client,"owner","entry","child");assert.equal(m.tables.entries[0].text,"원문");assert.equal(m.tables.entries[0].created_at,"then");assert.equal(m.tables.entries[0].child_id,"child");const write=m.calls.find(c=>c.update);assert.deepEqual(write?.update,{child_id:"child"});assert.equal(write?.filters.user_id,"owner");});
+test("foreign recipient is rejected before any write",async()=>{const m=mock();await assert.rejects(()=>assignRecipient(m.client,"owner","entry","foreign"));assert.equal(m.calls.filter(c=>c.update).length,0);});
+test("recipient may be cleared without overwriting the record",async()=>{const m=mock();m.tables.entries=[{id:"entry",user_id:"owner",child_id:"child",text:"원문"}];await assignRecipient(m.client,"owner","entry",null);assert.equal(m.tables.entries[0].child_id,null);assert.equal(m.tables.entries[0].text,"원문");});
