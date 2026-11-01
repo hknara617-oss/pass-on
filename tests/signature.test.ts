@@ -1,0 +1,17 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {includesMedia,rememberedRecipient,noteUrl,shortDate,elapsedDays} from "../src/lib/signature";
+import type {Child,Entry} from "../src/lib/types";
+const children=[{id:"one",name:"하루"},{id:"two",name:"봄"}] as Child[];
+const entry={text:"기억",attachments:[{type:"photo"},{type:"audio"}],link_attachments:[{url:"https://example.com"}]} as unknown as Entry;
+test("first use retains existing default recipient",()=>assert.equal(rememberedRecipient(null,children),"one"));
+test("last recipient is retained",()=>assert.equal(rememberedRecipient("two",children),"two"));
+test("later intention is not overwritten with first child",()=>assert.equal(rememberedRecipient("",children),""));
+test("stale recipient falls back without fabricating a person",()=>assert.equal(rememberedRecipient("missing",children),"one"));
+test("no children does not block capture",()=>assert.equal(rememberedRecipient(null,[]),""));
+test("mixed memory appears in each relevant view",()=>{for(const f of ["all","text","photo","audio","link"] as const)assert.equal(includesMedia(entry,f),true);});
+test("empty formats are excluded",()=>{const e={text:null,attachments:[],link_attachments:[]} as unknown as Entry;for(const f of ["text","photo","audio","link"] as const)assert.equal(includesMedia(e,f),false);});
+test("filters never change records",()=>{const before=JSON.stringify(entry);includesMedia(entry,"photo");assert.equal(JSON.stringify(entry),before);});
+test("saved receipt points to an encoded record not whole archive",()=>assert.equal(noteUrl("a&x=b"),"/archive?entry=a%26x%3Db"));
+test("short date uses Seoul day",()=>assert.equal(shortDate("2026-10-31T16:00:00Z"),"11월 1일"));
+test("elapsed days never goes negative",()=>{const now=Date.UTC(2026,10,1);assert.equal(elapsedDays("2026-10-18T00:00:00Z",now),14);assert.equal(elapsedDays("2026-11-02T00:00:00Z",now),0);});
