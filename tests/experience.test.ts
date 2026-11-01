@@ -5,7 +5,7 @@ import { persistCapture, assignRecipient } from "../src/lib/records";
 import type { Entry, Child } from "../src/lib/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 const children=[{id:"child",user_id:"owner",name:"하루"}] as Child[];
-const entry={id:"a",user_id:"owner",child_id:"child",text:"같이 걸었던 산책길",created_at:"2026-10-31T16:00:00Z",attachments:[],link_attachments:[{url:"https://example.com",quote_or_note:"Remember This",metadata_title:"A book"}],entry_notes:[{id:"n",text:"다시 보니 고마운 하루"}],entry_revisions:[],is_deleted:false} as Entry;
+const entry={id:"a",user_id:"owner",child_id:"child",text:"같이 걸었던 산책길",created_at:"2026-10-31T16:00:00Z",attachments:[],link_attachments:[{url:"https://example.com",quote_or_note:"Remember This",metadata_title:"A book"}],entry_notes:[{id:"n",text:"다시 보니 고마운 하루"}],entry_revisions:[],is_deleted:false} as unknown as Entry;
 test("search is Korean and ASCII case-insensitive",()=>{assert.ok(matchesEntry(entry,"산책길",children));assert.ok(matchesEntry(entry,"remember",children));});
 test("search includes notes and recipient names",()=>{assert.ok(matchesEntry(entry,"고마운",children));assert.ok(matchesEntry(entry,"하루",children));});
 test("all query words must match",()=>{assert.ok(matchesEntry(entry,"산책길 하루",children));assert.equal(matchesEntry(entry,"산책길 없는단어",children),false);});
