@@ -3,18 +3,18 @@ import {useEffect,useRef,useState} from "react";
 export function useVoiceStudio(onAudio:(file:Blob,seconds:number)=>void,onError:(text:string)=>void){
   const [state,setState]=useState<"idle"|"permission"|"recording"|"paused"|"finishing">("idle"),[elapsed,setElapsed]=useState(0),[levels,setLevels]=useState<number[]>([]),[interrupted,setInterrupted]=useState(false);
   const mounted=useRef(false),rec=useRef<MediaRecorder|null>(null),mic=useRef<MediaStream|null>(null),audio=useRef<AudioContext|null>(null),analyser=useRef<AnalyserNode|null>(null);
-  const lastStart=useRef(0),duration=useRef(0),totalBytes=useRef(0),audioDone=useRef(onAudio),report=useRef(onError),ending=useRef(false);
+  const lastStart=useRef(0),duration=useRef(0),totalBytes=useRef(0),audioDone=useRef(onAudio),report=useRef(onError),ending=useRef(false),requesting=useRef(false);
   audioDone.current=onAudio;report.current=onError;
   function seconds(){return Math.floor((duration.current+(rec.current?.state==="recording"?performance.now()-lastStart.current:0))/1000);}
   function stop(){const r=rec.current;if(!r||r.state==="inactive"||ending.current)return;ending.current=true;if(r.state==="recording")duration.current+=performance.now()-lastStart.current;r.stop();setState("finishing");}
   function pause(){const r=rec.current;if(!r||r.state!=="recording")return;duration.current+=performance.now()-lastStart.current;r.pause();setState("paused");setLevels([]);}
   function resume(){const r=rec.current;if(!r||r.state!=="paused")return;lastStart.current=performance.now();r.resume();setState("recording");setInterrupted(false);}
   async function start(){
-    if(rec.current?.state==="recording"||rec.current?.state==="paused"||state==="permission")return;
+    if(requesting.current||rec.current?.state==="recording"||rec.current?.state==="paused"||state==="permission")return;
     if(!navigator.mediaDevices?.getUserMedia||!globalThis.MediaRecorder){report.current("이 브라우저에서는 직접 녹음할 수 없어요. 더보기에서 음성 파일을 첨부해 주세요.");return;}
-    setState("permission");setInterrupted(false);ending.current=false;
+    requesting.current=true;setState("permission");setInterrupted(false);ending.current=false;
     try{
-      const stream=await navigator.mediaDevices.getUserMedia({audio:true});if(!mounted.current){stream.getTracks().forEach(t=>t.stop());return;}mic.current=stream;
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});if(!mounted.current){stream.getTracks().forEach(t=>t.stop());return;}if(document.visibilityState==="hidden"){stream.getTracks().forEach(t=>t.stop());setState("idle");report.current("화면으로 돌아온 뒤 다시 녹음을 시작해 주세요.");return;}mic.current=stream;
       const mime=["audio/mp4","audio/webm;codecs=opus","audio/webm"].find(v=>MediaRecorder.isTypeSupported(v));const recorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);rec.current=recorder;
       const chunks:BlobPart[]=[];duration.current=0;totalBytes.current=0;lastStart.current=performance.now();setElapsed(0);
       try{const context=new AudioContext();audio.current=context;const node=context.createAnalyser();node.fftSize=128;context.createMediaStreamSource(stream).connect(node);analyser.current=node;void context.resume().catch(()=>{});}catch{/* Meter is optional, recording is not. */}
@@ -23,7 +23,7 @@ export function useVoiceStudio(onAudio:(file:Blob,seconds:number)=>void,onError:
       recorder.onerror=()=>{if(mounted.current)report.current("녹음이 중단됐어요. 담긴 소리가 있으면 첨부에서 확인해 주세요.");if(recorder.state!=="inactive")stop();else{stream.getTracks().forEach(t=>t.stop());void audio.current?.close().catch(()=>{});if(mounted.current)setState("idle");}};
       stream.getAudioTracks().forEach(t=>t.onended=()=>{if(recorder.state!=="inactive")stop();});
       recorder.start(1000);setState("recording");
-    }catch{mic.current?.getTracks().forEach(t=>t.stop());if(mounted.current){setState("idle");report.current("마이크 권한을 확인해 주세요. 더보기에서 음성 파일을 첨부해도 괜찮아요.");}}
+    }catch{mic.current?.getTracks().forEach(t=>t.stop());if(mounted.current){setState("idle");report.current("마이크 권한을 확인해 주세요. 더보기에서 음성 파일을 첨부해도 괜찮아요.");}}finally{requesting.current=false;}
   }
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;if(rec.current){rec.current.onstop=null;rec.current.ondataavailable=null;if(rec.current.state!=="inactive")rec.current.stop();}mic.current?.getTracks().forEach(t=>t.stop());void audio.current?.close().catch(()=>{});};},[]);
   useEffect(()=>{if(state!=="recording"&&state!=="paused")return;const timer=setInterval(()=>{const s=seconds();setElapsed(s);if(s>=300){stop();return;}const node=analyser.current;if(node&&rec.current?.state==="recording"){const data=new Uint8Array(node.frequencyBinCount);node.getByteFrequencyData(data);setLevels(Array.from({length:18},(_,i)=>Math.max(4,Math.round(data[i*2]/255*42))));}},100);return()=>clearInterval(timer);},[state]);

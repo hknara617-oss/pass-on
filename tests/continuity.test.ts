@@ -1,0 +1,16 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {hasDraft,validateDraft,DraftConflict,type DraftContents} from '../src/lib/draft-vault';
+const empty=():DraftContents=>({childId:'',text:'',url:'',quote:'',media:[],attempt:null});
+test('recipient selection alone is not an unfinished draft',()=>assert.equal(hasDraft({...empty(),childId:'child'}),false));
+test('raw whitespace is still recoverable',()=>assert.equal(hasDraft({...empty(),text:'  '}),true));
+test('links and quoted text are drafts even without body text',()=>{assert.ok(hasDraft({...empty(),url:'https://example.com'}));assert.ok(hasDraft({...empty(),quote:'remember'}));});
+test('pending original attempt remains a recoverable draft',()=>assert.ok(hasDraft({...empty(),attempt:{id:'server-id',linkId:'link-id',childId:null,text:'',url:'',quote:'',createdAt:'2026-11-01T00:00:00Z'}})));
+test('valid draft validation does not mutate content',()=>{const value={...empty(),text:'있는 그대로의 원문'};const before=JSON.stringify(value);validateDraft(value);assert.equal(JSON.stringify(value),before);});
+test('oversized text is not silently truncated',()=>assert.throws(()=>validateDraft({...empty(),text:'x'.repeat(100001)})));
+test('oversized URL is not silently truncated',()=>assert.throws(()=>validateDraft({...empty(),url:'x'.repeat(10001)})));
+test('duplicate media identifiers are rejected before encryption',()=>{const m={id:'one',type:'photo' as const,file:new Blob(['x'],{type:'image/png'}),mime:'image/png',extension:'png',duration:null};assert.throws(()=>validateDraft({...empty(),media:[m,m]}));});
+test('attachments must retain their original Blob',()=>assert.throws(()=>validateDraft({...empty(),media:[{id:'one',type:'photo',file:{} as Blob,mime:'image/png',extension:'png',duration:null}]})));
+test('too many attachments fail explicitly',()=>{const media=Array.from({length:41},(_,i)=>({id:String(i),type:'photo' as const,file:new Blob(['x'],{type:'image/png'}),mime:'image/png',extension:'png',duration:null}));assert.throws(()=>validateDraft({...empty(),media}));});
+test('normal voice file with stored duration is accepted',()=>{const m={id:'voice',type:'audio' as const,file:new Blob(['original audio'],{type:'audio/webm'}),mime:'audio/webm',extension:'webm',duration:35};assert.doesNotThrow(()=>validateDraft({...empty(),media:[m]}));});
+test('revision conflicts explain recovery without suggesting deletion',()=>{const err=new DraftConflict();assert.ok(err instanceof Error);assert.ok(err.message.includes('새 초안'));});

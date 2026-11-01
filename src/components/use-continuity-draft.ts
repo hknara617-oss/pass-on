@@ -1,7 +1,7 @@
 "use client";
 import {useCallback,useEffect,useRef,useState} from "react";
 import {DraftConflict,hasDraft,listDrafts,readDraft,removeDraft,writeDraft,type DraftContents,type DraftSummary} from "@/lib/draft-vault";
-import type {CaptureDraft} from "@/lib/records";
+import {safeExternalUrl,type CaptureDraft} from "@/lib/records";
 export function useContinuityDraft(owner:string,value:DraftContents,restore:(value:DraftContents)=>void){
   const [ready,setReady]=useState(false),[status,setStatus]=useState<"idle"|"saving"|"saved"|"error"|"conflict">("idle"),[error,setError]=useState("");
   const [saved,setSaved]=useState<DraftSummary[]>([]),[recovering,setRecovering]=useState(false),[recovered,setRecovered]=useState(false);
@@ -29,7 +29,7 @@ export function useContinuityDraft(owner:string,value:DraftContents,restore:(val
     if(recovering)return;setRecovering(true);await chain.current;
     try{const old=await readDraft(owner,id);slot.current={id:old.id,revision:old.revision};halt.current=false;last.current=old.contents;apply.current(old.contents);setRecovered(true);setStatus("saved");setError("");await refresh();}catch(e){setError(e instanceof Error?e.message:"초안을 복구하지 못했어요.");}finally{setRecovering(false);}
   }
-  async function freeze(attempt:CaptureDraft){const c={...live.current,attempt};live.current=c;await enqueue(c);if(halt.current)throw new DraftConflict();}
+  async function freeze(attempt:CaptureDraft){if(attempt.url&&!safeExternalUrl(attempt.url))throw new Error("http 또는 https 링크를 입력해 주세요.");const c={...live.current,attempt};live.current=c;await enqueue(c);if(halt.current)throw new DraftConflict();}
   async function complete(){
     await chain.current;const old=slot.current;halt.current=true;
     try{if(old.revision!==null)await removeDraft(owner,old.id,old.revision);}catch{if(alive.current)setError("서버 저장은 완료했지만 기기 초안 정리를 확인하지 못했어요. 다시 열면 같은 기록으로 확인합니다.");}
@@ -37,5 +37,5 @@ export function useContinuityDraft(owner:string,value:DraftContents,restore:(val
   }
   async function newDraft(){await chain.current;slot.current={id:crypto.randomUUID(),revision:null};halt.current=false;last.current=null;setRecovered(false);setStatus("idle");setError("");await refresh();}
   async function discard(item:DraftSummary){await removeDraft(owner,item.id,item.revision);await refresh();}
-  return {ready,status,error,saved,recovering,recovered,resume,freeze,complete,newDraft,discard,refresh,flush:()=>enqueue(live.current),safe:status==="saved"&&!recovering};
+  return {ready,status,error,saved,recovering,recovered,resume,freeze,complete,newDraft,discard,refresh,flush:()=>enqueue(live.current),safe:status==="saved"&&!recovering&&!!last.current&&last.current.text===value.text&&last.current.url===value.url&&last.current.quote===value.quote&&last.current.childId===value.childId&&last.current.media===value.media&&last.current.attempt===value.attempt};
 }
