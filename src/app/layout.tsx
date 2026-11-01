@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./signature.css";
 import "./signature-polish.css";
+import "./continuity.css";
 export const metadata: Metadata = {
   title: "PASS ON", description: "오늘의 나를, 내일의 너에게.", manifest: "/manifest.json",
   icons: { apple: "/icons/icon-192.png", icon: "/icons/icon-192.png" },

@@ -1,0 +1,1 @@
+export default function Loading(){return <section className="loading-note" role="status" aria-live="polite"><span>남겨둔 순간을 불러오고 있어요.</span><div className="loading-lines" aria-hidden="true"><i/><i/><i/></div></section>;}
